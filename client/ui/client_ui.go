@@ -149,23 +149,24 @@ type serviceClient struct {
 	icUpdateCloud        []byte
 
 	// systray menu items
-	mStatus           *systray.MenuItem
-	mUp               *systray.MenuItem
-	mDown             *systray.MenuItem
-	mAdminPanel       *systray.MenuItem
-	mSettings         *systray.MenuItem
-	mAbout            *systray.MenuItem
-	mVersionUI        *systray.MenuItem
-	mVersionDaemon    *systray.MenuItem
-	mUpdate           *systray.MenuItem
-	mQuit             *systray.MenuItem
-	mNetworks         *systray.MenuItem
-	mAllowSSH         *systray.MenuItem
-	mAutoConnect      *systray.MenuItem
-	mEnableRosenpass  *systray.MenuItem
-	mNotifications    *systray.MenuItem
-	mAdvancedSettings *systray.MenuItem
-	mExitNode         *systray.MenuItem
+	mStatus            *systray.MenuItem
+	mUp                *systray.MenuItem
+	mDown              *systray.MenuItem
+	mAdminPanel        *systray.MenuItem
+	mSettings          *systray.MenuItem
+	mAbout             *systray.MenuItem
+	mVersionUI         *systray.MenuItem
+	mVersionDaemon     *systray.MenuItem
+	mUpdate            *systray.MenuItem
+	mQuit              *systray.MenuItem
+	mNetworks          *systray.MenuItem
+	mAllowSSH          *systray.MenuItem
+	mAutoConnect       *systray.MenuItem
+	mEnableRosenpass   *systray.MenuItem
+	mNotifications     *systray.MenuItem
+	mAdvancedSettings  *systray.MenuItem
+	mCreateDebugBundle *systray.MenuItem
+	mExitNode          *systray.MenuItem
 
 	// application with main windows.
 	app                  fyne.App
@@ -569,6 +570,7 @@ func (s *serviceClient) onTrayReady() {
 	s.mEnableRosenpass = s.mSettings.AddSubMenuItemCheckbox("Enable Quantum-Resistance", "Enable post-quantum security via Rosenpass", false)
 	s.mNotifications = s.mSettings.AddSubMenuItemCheckbox("Notifications", "Enable notifications", true)
 	s.mAdvancedSettings = s.mSettings.AddSubMenuItem("Advanced Settings", "Advanced settings of the application")
+	s.mCreateDebugBundle = s.mSettings.AddSubMenuItem("Create Debug Bundle", "Create and open debug information bundle")
 	s.loadSettings()
 
 	s.exitNodeMu.Lock()
@@ -678,12 +680,32 @@ func (s *serviceClient) onTrayReady() {
 					log.Errorf("failed to update config: %v", err)
 					return
 				}
+			case <-s.mNotifications.ClickedCh:
+				if s.mNotifications.Checked() {
+					s.mNotifications.Uncheck()
+				} else {
+					s.mNotifications.Check()
+				}
+				if s.eventManager != nil {
+					s.eventManager.SetNotificationsEnabled(s.mNotifications.Checked())
+				}
+				if err := s.updateConfig(); err != nil {
+					log.Errorf("failed to update config: %v", err)
+					return
+				}
 			case <-s.mAdvancedSettings.ClickedCh:
 				s.mAdvancedSettings.Disable()
 				go func() {
 					defer s.mAdvancedSettings.Enable()
 					defer s.getSrvConfig()
 					s.runSelfCommand("settings", "true")
+				}()
+			case <-s.mCreateDebugBundle.ClickedCh:
+				go func() {
+					if err := s.createAndOpenDebugBundle(); err != nil {
+						log.Errorf("Failed to create debug bundle: %v", err)
+						s.app.SendNotification(fyne.NewNotification("Error", "Failed to create debug bundle"))
+					}
 				}()
 			case <-s.mQuit.ClickedCh:
 				systray.Quit()
@@ -699,19 +721,6 @@ func (s *serviceClient) onTrayReady() {
 					defer s.mNetworks.Enable()
 					s.runSelfCommand("networks", "true")
 				}()
-			case <-s.mNotifications.ClickedCh:
-				if s.mNotifications.Checked() {
-					s.mNotifications.Uncheck()
-				} else {
-					s.mNotifications.Check()
-				}
-				if s.eventManager != nil {
-					s.eventManager.SetNotificationsEnabled(s.mNotifications.Checked())
-				}
-				if err := s.updateConfig(); err != nil {
-					log.Errorf("failed to update config: %v", err)
-					return
-				}
 			}
 
 			if err != nil {
